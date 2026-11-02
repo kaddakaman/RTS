@@ -1,0 +1,104 @@
+# Builds the Android app (APK) on GitHub's servers whenever the game changes,
+# and publishes it at: https://github.com/kaddakaman/RTS/releases/latest
+#
+# Signing: every version should be signed with the same key so updates install
+# over the old app. The key is stored encrypted in android/app/rts-release.jks.enc
+# and unlocked with a repository secret named KEYSTORE_PASSWORD
+# (Settings > Secrets and variables > Actions). Until that secret exists the
+# build still works, but signs with a throwaway key (so each new build has to
+# be installed fresh rather than as an update).
+name: Build Android APK
+
+on:
+  push:
+    branches: [claude/mobile-rts-game-design-ruirw9, main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unlock the signing key
+        id: key
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_PASSWORD" ]; then
+            openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+              -in android/app/rts-release.jks.enc -out android/app/rts-release.jks \
+              -pass env:KEYSTORE_PASSWORD
+            echo "permanent=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning title=Using a temporary signing key::Add a repository secret named KEYSTORE_PASSWORD (Settings > Secrets and variables > Actions) so every build is signed with the same key and installs as an update."
+            keytool -genkeypair -keystore android/app/rts-release.jks -storetype JKS -alias rts \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass temporary-key -keypass temporary-key -dname "CN=Shatterfront (temporary key)"
+            echo "permanent=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install game tools
+        run: npm ci
+
+      - name: Run the game's tests
+        run: npm test
+
+      - name: Build the game
+        run: npm run build
+
+      - name: Copy the game into the Android app
+        run: npx cap sync android
+
+      - name: Build the APK
+        working-directory: android
+        env:
+          KEYSTORE_FILE: app/rts-release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'temporary-key' }}
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 0.1.${{ github.run_number }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+          cp app/build/outputs/apk/release/app-release.apk ../Shatterfront.apk
+
+      - name: Remove the unlocked key
+        if: always()
+        run: rm -f android/app/rts-release.jks
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Shatterfront-apk
+          path: Shatterfront.apk
+
+      - name: Publish the APK on the Releases page
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PERMANENT: ${{ steps.key.outputs.permanent }}
+        run: |
+          NOTE="Android phones and tablets: download Shatterfront.apk below, open it and tap Install. If your phone asks, allow your browser to install unknown apps."
+          if [ "$PERMANENT" != "true" ]; then
+            NOTE="$NOTE (This build uses a temporary signing key: uninstall the previous version before installing it.)"
+          fi
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest Shatterfront.apk \
+            --target "${{ github.sha }}" \
+            --title "Shatterfront - latest build (version 0.1.${{ github.run_number }})" \
+            --notes "$NOTE"

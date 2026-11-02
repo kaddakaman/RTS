@@ -1,0 +1,26 @@
+{
+  "name": "shatterfront-rts",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Shatterfront - a controller-first real-time strategy game for Android with rock-paper-scissors combat.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.0",
+    "typescript": "5.9.3",
+    "vite": "^8.0.0",
+    "vitest": "^5.0.0"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.6.0",
+    "peerjs": "^1.5.4"
+  }
+}
