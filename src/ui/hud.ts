@@ -291,7 +291,7 @@ export class Hud {
     }
     const sw = this.w.superweapon(this.me());
     this.touchBtns.power.classList.toggle('hidden', !sw || sw.charge > 0);
-    this.touchBtns.type.classList.toggle('hidden', new Set(sel.map((u) => u.key)).size < 2 && !c.selected.length);
+    this.touchBtns.type.classList.toggle('hidden', new Set(sel.map((u) => u.key)).size < 2);
   }
 
   private renderHints(): void {

@@ -780,9 +780,10 @@ td.bad,
 .tbtn.big {
   grid-column: span 3;
   height: 50px;
-  background: rgba(242, 181, 68, 0.25);
-  border-color: rgba(242, 181, 68, 0.7);
-  font-size: 14px;
+  background: rgba(120, 82, 20, 0.85);
+  border-color: rgba(242, 181, 68, 0.8);
+  color: #ffe7b0;
+  font-size: 15px;
 }
 
 .tbtn.power {

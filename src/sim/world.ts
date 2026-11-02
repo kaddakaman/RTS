@@ -1096,7 +1096,7 @@ export class World {
       u.anchorX = b.x;
       u.anchorY = b.y;
     }
-    this.alert(b.owner, 'unit-ready', `${def.name} ready`, u.x, u.y, 'done', 0.5);
+    this.alert(b.owner, 'unit-ready', `${def.name} ready`, u.x, u.y, 'done', 4);
   }
 
   private finishResearch(b: Building, key: ResearchKey): void {
