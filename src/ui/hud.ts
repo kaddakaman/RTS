@@ -154,7 +154,7 @@ export class Hud {
     this.sel.classList.remove('hidden');
     if (sel.length === 1) {
       const u = sel[0];
-      this.sel.innerHTML = unitCard(u, true);
+      this.sel.innerHTML = unitCard(u, true, this.w.capacityOf(u)) + this.upgradeLine(u);
       return;
     }
     const groups = new Map<string, Unit[]>();
@@ -179,6 +179,20 @@ export class Hud {
     this.sel.innerHTML = html;
   }
 
+  /** Which upgrades apply to this unit, and whether they're researched. */
+  private upgradeLine(u: Unit): string {
+    const pl = this.w.players[u.owner];
+    const fac = FACTIONS[u.faction];
+    const parts: string[] = [];
+    for (const r of Object.values(fac.research)) {
+      if (!r || !r.units?.includes(u.key)) continue;
+      parts.push(pl.researched.has(r.key) ? `<span class="good">${r.name} ✓</span>` : `<span class="sub">${r.name}: not researched</span>`);
+    }
+    let html = parts.length ? `<div class="upg">${parts.join(' · ')}</div>` : '';
+    if (u.def.role === 'builder') html += '<div class="sub">Repairs damaged buildings nearby when idle (or X / tap a damaged building).</div>';
+    return html;
+  }
+
   private renderHover(): void {
     const h = this.ctl.hover;
     const me = this.me();
@@ -197,6 +211,9 @@ export class Hud {
     }
     this.info.innerHTML = html;
     this.info.classList.remove('hidden');
+    // keep the panel out of the way of the cursor
+    const c = this.r.worldToScreen(this.ctl.cursor.x, this.ctl.cursor.y);
+    this.info.classList.toggle('left', c.x > this.r.w * 0.55);
   }
 
   // ---------------------------------------------------------------- radial menu
@@ -305,7 +322,7 @@ export class Hud {
     else if (c.mode === 'target') h = '<b>A</b> FIRE · <b>B</b> cancel';
     else if (c.mode === 'rally') h = '<b>A</b> set rally point · <b>B</b> cancel';
     else if (c.selected.length) h = '<b>X</b> command · <b>Y</b> ability · <b>RB</b> unit type · <b>B</b> deselect · <b>LB</b> army';
-    else h = '<b>A</b> select (hold: paint) · <b>LB</b> army (×2 all) · <b>D-pad</b> ▲base ▼army ◀alert ▶buildings · <b>LT</b> zoom';
+    else h = '<b>A</b> select (hold: paint) · <b>R-stick</b> scroll · <b>LB</b> army (×2 all) · <b>D-pad</b> ▲base ▼army ◀alert ▶buildings';
     this.hints.innerHTML = h;
   }
 
@@ -343,7 +360,7 @@ export class Hud {
         d[j] = 6;
         d[j + 1] = 8;
         d[j + 2] = 14;
-        d[j + 3] = pl.vis[i] ? 0 : pl.explored[i] ? 115 : 242;
+        d[j + 3] = pl.vis[i] ? 0 : pl.explored[i] ? 70 : 242;
       }
       this.fogCanvas.getContext('2d')!.putImageData(this.fogImg!, 0, 0);
       ctx.imageSmoothingEnabled = true;
@@ -408,7 +425,7 @@ function hpBar(f: number): string {
   return `<span class="hp"><i style="width:${Math.round(Math.max(0, f) * 100)}%;background:${c}"></i></span>`;
 }
 
-function unitCard(u: Unit, full: boolean): string {
+function unitCard(u: Unit, full: boolean, capacity = u.def.capacity ?? 0): string {
   const d = u.def;
   const members = d.members ? ` · ${u.alive}/${u.members} ${u.medic ? '(+medic)' : ''}` : '';
   const weapons = d.weapons.map((w) => w.name).join(', ');
@@ -416,7 +433,7 @@ function unitCard(u: Unit, full: boolean): string {
   html += `<div class="rps"><span class="good">Strong vs: ${d.strong}</span><span class="bad">Weak vs: ${d.weak}</span></div>`;
   if (full) {
     html += `<div class="sub">${ARMOR_NAMES[d.armor]}${weapons ? ' · ' + weapons : ' · unarmed'}</div>`;
-    if (d.capacity) html += `<div class="sub">Carrying ${u.passengers.length}/${d.capacity}</div>`;
+    if (capacity) html += `<div class="sub">Carrying ${u.passengers.length}/${capacity}</div>`;
     if (d.carry) html += `<div class="sub">Cargo ${Math.round(u.cargo)}/${d.carry}</div>`;
     if (d.bomber) html += `<div class="sub">${u.ammo > 0 ? 'Armed' : 'Rearming at air base'}</div>`;
     if (d.ability) {

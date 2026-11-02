@@ -568,7 +568,7 @@ export class Renderer {
       d[j] = 6;
       d[j + 1] = 8;
       d[j + 2] = 14;
-      d[j + 3] = vis[i] ? 0 : ex[i] ? 120 : 255;
+      d[j + 3] = vis[i] ? 0 : ex[i] ? 72 : 255;
     }
     this.fogCtx.putImageData(this.fogImg, 0, 0);
   }

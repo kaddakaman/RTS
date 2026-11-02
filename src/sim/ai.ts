@@ -186,6 +186,9 @@ export class SkirmishAI implements Controller {
       B('bunker', 'bunker', 1, () => d.defenses && t() > 240, () => this.rampSpot(3)),
       B('dropzone', 'dropzone', 1, () => tier() >= 2 && t() > 300, base),
       R('medic', () => tier() >= 2 && t() > 420),
+      R('cabs', () => t() > 300),
+      R('speedload', () => tier() >= 2 && (this.seen.veh > 1 || t() > 540)),
+      R('optics', () => tier() >= 2 && t() > 500),
       B('barracks2', 'barracks', 2, () => this.diff === 'hard' && tier() >= 2, base),
       R('tier3', () => this.count('factory') > 0 && t() > 480),
       B('airbase', 'airbase', 1, () => tier() >= 3, base),
@@ -193,6 +196,10 @@ export class SkirmishAI implements Controller {
       B('arty', 'arty', 1, () => d.defenses && tier() >= 2 && t() > 600, () => this.rampSpot(5)),
       B('dropzone2', 'dropzone', 2, () => tier() >= 3, base),
       B('expand2', 'depot', 3, () => t() > 600 || this.activeSupply() < 4000, () => this.depotSpot(this.expansionPile())),
+      R('aps', () => this.count('factory') > 0 && t() > 600),
+      R('plating', () => this.count('factory') > 0 && t() > 660),
+      R('rapid', () => t() > 700),
+      R('jammer', () => this.count('airbase') > 0 && this.seen.air + this.seen.inf > 1),
       R('tier4', () => this.count('airbase') > 0 && t() > 780),
       B('super', 'super', 1, () => tier() >= 4, base),
       B('factory2', 'factory', 2, () => this.diff !== 'easy' && tier() >= 3, base),
@@ -229,7 +236,7 @@ export class SkirmishAI implements Controller {
         continue;
       }
       if (s.research) {
-        const at = s.research === 'medic' ? w.buildingsOf(this.p).find((b) => b.key === 'barracks' && b.built) : this.hq;
+        const at = w.buildingsOf(this.p).find((b) => b.built && b.def.research?.includes(s.research!));
         if (!at) continue;
         const why = w.researchBlocker(at, s.research);
         const cost = FACTIONS[this.me.faction].research[s.research]!.cost;

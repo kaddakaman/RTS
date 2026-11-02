@@ -39,7 +39,7 @@ npm run dev        # then open the printed address
 **Win** by destroying every enemy HQ. Lose your HQ and you're out (in team games your team carries on while any ally still has an HQ).
 
 ### Economy
-- You start with an HQ, one builder and one supply truck next to your **main supply cache**.
+- You start with an HQ, one builder and one supply truck next to your **main supply cache** (enough for roughly the first ten minutes or so with a few trucks).
 - **Supply trucks** carry supplies from caches to your HQ or a Supply Depot. Caches run dry, so expand to the other caches around the map.
 - A **Supply Drop Zone** gives income that never runs out: the Coalition's cargo plane air-drops crates, and the Sythari teleport supplies down from orbit.
 - Destroying a Marauder stronghold pays a bounty and frees up the supplies it was guarding.
@@ -78,8 +78,26 @@ The builder (Engineer Dozer / Shaper Drone) constructs everything:
 
 Unit abilities (Y / Ability button): rifle squads throw grenades, scouts fire a recon pulse, light vehicles boost, transports unload, bombers return to rearm.
 
+### Upgrades
+Every unit type has an upgrade (the Sythari versions have their own names):
+
+| Researched at | Upgrade | Effect |
+|---|---|---|
+| Barracks | Field Medics | Rifle squads get a medic: an extra member and healing out of combat |
+| Barracks | Spotter Optics | Snipers: +4 vision, +1 range |
+| Barracks | Speed Loading | Rocket teams reload about 50% faster |
+| Vehicle Depot | Active Protection | Tanks shoot down one incoming rocket or plasma bolt every 4 seconds |
+| Vehicle Depot | Composite Plating | Light combat vehicles: +30% health |
+| Vehicle Depot | Long-Range Sensors | Scouts: +3 vision, recon pulse recharges twice as fast |
+| Vehicle Depot | Reinforced Hull | Transports: +25% health and room for a third squad |
+| Air Base | ECM Jammers | All aircraft: 40% of guided missiles, rockets and plasma bolts lose their lock and miss |
+| Supply Depot | Armoured Cabs | Supply trucks: +50% health |
+| HQ | Rapid Construction | Builders build and repair 40% faster |
+
+Builders repair damaged buildings near them by themselves when idle, or you can order a repair: select the builder and press X (or tap) on the building.
+
 ### The map: Ember Basin
-A four-base desert map. Each base sits on a plateau with a wide **main ramp** facing the middle and a narrow **side ramp** facing a corner: two chokepoints to hold. Units below a cliff can't see what's on top, scrub forests hide infantry (vehicles can't enter them), and rocks block sight. Aircraft see and fly over everything, so watch your cliff edges for drops. Supply caches sit in each base, outside each ramp, in the fields between bases and in every corner, and there's a big hoard on the raised centre, which is ringed by a moat with four crossings.
+A four-base desert map. Each base sits on a plateau with a wide **main ramp** facing the middle and a narrow **side ramp** facing a corner: two chokepoints to hold. You can always see the whole map, but enemy units and buildings only appear where your own units and buildings have line of sight. Units below a cliff can't see what's on top, scrub forests hide infantry (vehicles can't enter them), and rocks block sight. Aircraft see and fly over everything, so watch your cliff edges for drops. Supply caches sit in each base, outside each ramp, in the fields between bases and in every corner, and there's a big hoard on the raised centre, which is ringed by a moat with four crossings.
 
 ### Game modes
 **Skirmish** (one phone): you plus 1-3 AI players (Easy / Normal / Hard), on any teams: 1v1, 2v2 with an AI ally, or free-for-all. In a 1v1, the two empty bases are taken over by the Marauders.
@@ -91,8 +109,8 @@ A four-base desert map. Each base sits on a plateau with a wide **main ramp** fa
 ### Controller (Halo Wars style)
 | Button | Action |
 |---|---|
-| Left stick | Move the reticle / camera |
-| Right stick | Zoom (click to reset) |
+| Left stick | Move the reticle around the screen (push it into an edge to scroll the map) |
+| Right stick | Scroll the map (click: zoom in / normal / out) |
 | A | Select (hold to paint-select, double-tap for all of that type on screen) |
 | X | Command: move, attack, gather, build/repair, board, man an emplacement, depending on the target |
 | Y | Unit ability, or the **build menu** when builders are selected |
@@ -104,10 +122,10 @@ A four-base desert map. Each base sits on a plateau with a wide **main ramp** fa
 | D-pad | ▲ HQ · ▼ army · ◀ latest alert · ▶ next production building |
 | Start / Back | Pause menu / battle report |
 
-Selecting a building opens a radial menu: point the stick and press A to queue; X cancels the last item. With a building selected, X on the ground sets its rally point.
+Selecting a building opens a radial menu: point the stick and press A to queue; X cancels the last item. Busy buildings keep their unit upgrades in an "Upgrades" sub-menu. With a building selected, X on the ground sets its rally point.
 
 ### Touch
-Drag to scroll, pinch to zoom, tap to select, tap the ground / an enemy / a cache to give orders, long-press and drag to paint-select, double-tap a unit for all of that type. On-screen buttons cover the controller actions, and you can tap the minimap to jump there.
+Drag to scroll, pinch to zoom, tap to select, tap the ground / an enemy / a cache to give orders, tap your gunner emplacement with a squad selected to man it (or a damaged building with a builder selected to repair it), long-press and drag to paint-select, double-tap a unit for all of that type. On-screen buttons cover the controller actions, and you can tap the minimap to jump there.
 
 ### Keyboard and mouse
 Left click / drag to select, right click to command, WASD or arrows to scroll, wheel to zoom, Q ability, B build, E army, Tab unit types, H HQ, G alert, P buildings, R superweapon, Z tactical zoom, Esc cancel/pause.

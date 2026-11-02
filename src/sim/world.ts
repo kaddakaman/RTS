@@ -11,6 +11,7 @@ import {
   POP_CAP,
   RECON,
   STARTING_SUPPLIES,
+  UPGRADE,
   buildingDef,
   damageMult,
   researchDef,
@@ -214,6 +215,8 @@ export class World {
       let v = visions.get(p.team);
       if (!v) {
         v = new Vision(size);
+        // the terrain is always known; fog of war only hides units and structures
+        v.explored.fill(1);
         visions.set(p.team, v);
       }
       p.vision = v;
@@ -441,10 +444,50 @@ export class World {
       }
     }
     const u = new Unit(this.nextId++, owner, faction, key, def, px, py);
-    if (def.medic && this.players[owner].researched.has('medic')) this.addMedic(u);
+    this.applyUpgrades(u);
     this.units.push(u);
     this.byId.set(u.id, u);
     return u;
+  }
+
+  /** Has this player researched an upgrade? */
+  has(owner: number, key: ResearchKey): boolean {
+    return this.players[owner]?.researched.has(key) ?? false;
+  }
+
+  /** Vision range, including upgrades (and a sniper team that lost its spotter). */
+  sightOf(u: Unit): number {
+    let s = u.def.sight;
+    if (u.key === 'sniper') {
+      if (this.has(u.owner, 'optics')) s += UPGRADE.optics.sight;
+      if (u.alive < 2) s -= 3;
+    }
+    if (u.key === 'scout' && this.has(u.owner, 'sensors')) s += UPGRADE.sensors.sight;
+    return s;
+  }
+
+  rangeBonus(u: Unit): number {
+    return u.key === 'sniper' && this.has(u.owner, 'optics') ? UPGRADE.optics.range : 0;
+  }
+
+  capacityOf(u: Unit): number {
+    return (u.def.capacity ?? 0) + (u.key === 'apc' && this.has(u.owner, 'hull') ? UPGRADE.hull.capacity : 0);
+  }
+
+  /** Applies any researched health upgrades (and medics) a unit doesn't have yet. */
+  private applyUpgrades(u: Unit): void {
+    const hp: [ResearchKey, UnitKey, number][] = [
+      ['plating', 'light', UPGRADE.plating.hp],
+      ['hull', 'apc', UPGRADE.hull.hp],
+      ['cabs', 'truck', UPGRADE.cabs.hp],
+    ];
+    for (const [k, key, m] of hp) {
+      if (u.key !== key || !this.has(u.owner, k) || u.upgrades.has(k)) continue;
+      u.upgrades.add(k);
+      u.maxHp *= m;
+      u.hp *= m;
+    }
+    if (u.def.medic && this.has(u.owner, 'medic')) this.addMedic(u);
   }
 
   private addMedic(u: Unit): void {
@@ -723,10 +766,10 @@ export class World {
         return 'return';
       }
     }
-    if (hovered && hovered.kind === 'unit' && hovered.owner === owner && hovered.def.capacity) {
+    if (hovered && hovered.kind === 'unit' && hovered.owner === owner && this.capacityOf(hovered) > 0) {
       const inf = mine.filter((u) => u.def.infantry);
       if (inf.length) {
-        this.cmdEnter(inf.slice(0, hovered.def.capacity - hovered.passengers.length), hovered);
+        this.cmdEnter(inf.slice(0, Math.max(1, this.capacityOf(hovered) - hovered.passengers.length)), hovered);
         return 'board';
       }
     }
@@ -784,7 +827,7 @@ export class World {
       } else if (ab === 'recon') {
         this.players[owner].recon.push({ x: u.x, y: u.y, until: this.time + RECON.duration });
         if (this.collectFx) this.fx.push({ k: 'recon', x: u.x, y: u.y, r: RECON.radius, owner });
-        u.abilityCd = ABILITIES.recon.cooldown;
+        u.abilityCd = ABILITIES.recon.cooldown * (this.has(owner, 'sensors') ? UPGRADE.sensors.recon : 1);
         this.updateFog(owner);
         used = 'recon';
       } else if (ab === 'boost') {
@@ -1104,7 +1147,7 @@ export class World {
     const def = researchDef(b.faction, key);
     pl.researched.add(key);
     if (def.tier) pl.tier = Math.max(pl.tier, def.tier);
-    if (key === 'medic') for (const u of this.units) if (u.owner === b.owner && u.def.medic) this.addMedic(u);
+    for (const u of this.units) if (u.owner === b.owner && !u.dead) this.applyUpgrades(u);
     this.alert(b.owner, 'research', `${def.name} complete`, b.x, b.y, 'done', 0.5);
   }
 
@@ -1162,9 +1205,32 @@ export class World {
       u.scanT -= dt;
       if (u.scanT <= 0) {
         u.scanT = 0.25 + Math.random() * 0.1;
-        const maxRange = Math.max(...u.def.weapons.map((w) => w.range));
-        const acquire = o.type === 'move' && !o.attackMove ? maxRange : Math.max(u.def.sight, maxRange);
+        const maxRange = Math.max(...u.def.weapons.map((w) => w.range)) + this.rangeBonus(u);
+        const acquire = o.type === 'move' && !o.attackMove ? maxRange : Math.max(this.sightOf(u), maxRange);
         if (o.type !== 'attack') u.target = this.findTarget(u, u.x, u.y, acquire, u.def.weapons, o);
+      }
+    }
+
+    // idle builders look after nearby structures by themselves
+    if (o.type === 'idle' && u.def.role === 'builder') {
+      u.scanT -= dt;
+      if (u.scanT <= 0) {
+        u.scanT = 1 + Math.random() * 0.3;
+        let job: Building | null = null;
+        let bd = 10;
+        for (const b of this.buildings) {
+          if (b.dead || b.owner !== u.owner || (b.built && b.hp >= b.maxHp * 0.97)) continue;
+          const d = this.edgeDist(u.x, u.y, b);
+          if (d < bd) {
+            bd = d;
+            job = b;
+          }
+        }
+        if (job) {
+          u.order = { type: 'build', target: job.id };
+          u.hasGoal = false;
+          return;
+        }
       }
     }
 
@@ -1228,7 +1294,7 @@ export class World {
         break;
       case 'enter': {
         const t = this.entity(o.target);
-        const full = !t || t.dead || (t.kind === 'unit' ? t.passengers.length >= (t.def.capacity ?? 0) : !t.built || !!t.garrison);
+        const full = !t || t.dead || (t.kind === 'unit' ? t.passengers.length >= this.capacityOf(t) : !t.built || !!t.garrison);
         if (full) {
           u.order = { type: 'idle' };
           u.anchorX = u.x;
@@ -1622,7 +1688,7 @@ export class World {
     }
     this.stopMoving(u);
     u.angle = turnTowards(u.angle, Math.atan2(b.y - u.y, b.x - u.x), dt * 4);
-    const rate = u.def.buildRate ?? 1;
+    const rate = (u.def.buildRate ?? 1) * (this.has(u.owner, 'rapid') ? UPGRADE.rapid.build : 1);
     // several builders speed things up, with diminishing returns
     const helpers = this.units.filter((v) => v.owner === u.owner && v.order.type === 'build' && v.order.target === b.id && !v.moving).length;
     const share = helpers > 1 ? (1 + 0.6 * (helpers - 1)) / helpers : 1;
@@ -1763,7 +1829,7 @@ export class World {
   private inRange(a: Unit | Building, w: WeaponDef, t: Entity, bonus: number): boolean {
     const d = this.edgeDist(a.x, a.y, t) - (a.kind === 'building' ? a.radius : 0);
     if (w.minRange && d < w.minRange) return false;
-    return d <= w.range + bonus;
+    return d <= w.range + bonus + (a.kind === 'unit' ? this.rangeBonus(a) : 0);
   }
 
   /** May `a` (owned by its owner) pick `t` as a target on its own initiative? */
@@ -1842,7 +1908,7 @@ export class World {
         if (u.def.role !== 'infantry' && Math.abs(wrapAngle(want - u.angle)) > 0.6) continue;
       }
       if (u.cds[i] > 0) continue;
-      u.cds[i] = w.cooldown * (0.9 + Math.random() * 0.2);
+      u.cds[i] = w.cooldown * (0.9 + Math.random() * 0.2) * (u.key === 'rocket' && this.has(u.owner, 'speedload') ? UPGRADE.speedload.reload : 1);
       this.launch(u, w, t, w.perMember ? u.shooters : 1);
     }
     if (!u.def.weapons.some((w) => w.turret)) u.turret = u.angle;
@@ -1872,10 +1938,22 @@ export class World {
     }
     const d = dist(a.x, a.y, t.x, t.y);
     const dur = Math.max(0.08, d / w.speed);
-    this.projectiles.push({
+    const p: Projectile = {
       fx: w.fx, x: a.x, y: a.y, sx: a.x, sy: a.y, tx: t.x, ty: t.y, target: t.id, speed: w.speed, damage, dmg: w.dmg, splash: w.splash ?? 0,
       owner: a.owner, src: a.id, t: 0, dur, toAir, faction: a.faction,
-    });
+    };
+    // aircraft jammers make guided weapons lose their lock
+    const guided = w.fx === 'missile' || w.fx === 'rocket' || w.fx === 'plasma';
+    if (guided && toAir && this.has(t.owner, 'jammer') && Math.random() < UPGRADE.jammer.chance) {
+      const ang = Math.random() * Math.PI * 2;
+      const off = 1.6 + Math.random() * 1.4;
+      p.jammed = true;
+      p.target = 0;
+      p.tx = t.x + Math.cos(ang) * off;
+      p.ty = t.y + Math.sin(ang) * off;
+      if (this.collectFx) this.fx.push({ k: 'text', x: t.x, y: t.y - 1.2, text: 'jammed', color: '#9fe8ff', owner: t.owner });
+    }
+    this.projectiles.push(p);
     if (this.collectFx) this.fx.push({ k: 'shot', fx: w.fx, x: a.x, y: a.y, x2: t.x, y2: t.y, owner: a.owner, faction: a.faction, air: toAir });
   }
 
@@ -1900,6 +1978,16 @@ export class World {
       }
       // impact
       const t = p.target ? this.entity(p.target) : undefined;
+      if (t && t.kind === 'unit' && t.key === 'tank' && p.dmg === 'ap' && !p.jammed && this.time >= t.apsReady && this.has(t.owner, 'aps')) {
+        // active protection: the incoming round is shot down just short of the tank
+        t.apsReady = this.time + UPGRADE.aps.cooldown;
+        const back = Math.atan2(p.sy - t.y, p.sx - t.x);
+        if (this.collectFx) {
+          this.fx.push({ k: 'impact', fx: 'missile', x: t.x + Math.cos(back) * 0.9, y: t.y + Math.sin(back) * 0.9, size: 0.4, air: false });
+          this.fx.push({ k: 'text', x: t.x, y: t.y - 1, text: 'APS', color: '#9fe8ff', owner: t.owner });
+        }
+        continue;
+      }
       if (this.collectFx) this.fx.push({ k: 'impact', fx: p.fx, x: p.tx, y: p.ty, size: p.splash ? p.splash : 0.4, air: p.toAir });
       if (p.splash > 0) {
         if (t && !t.dead && dist(t.x, t.y, p.tx, p.ty) < (t.kind === 'building' ? t.radius + 0.5 : 0.8)) this.damage(t, p.damage, p.dmg, p.owner, p.src, p.sx, p.sy);
@@ -2080,9 +2168,7 @@ export class World {
     const isMember = (o: number) => this.players[o].team === team;
     for (const u of this.units) {
       if (u.dead || u.container || !isMember(u.owner)) continue;
-      let sight = u.def.sight;
-      if (u.key === 'sniper' && u.alive < 2) sight -= 3; // lost the spotter
-      castVision(map, vis, u.x, u.y, sight, u.air);
+      castVision(map, vis, u.x, u.y, this.sightOf(u), u.air);
     }
     for (const b of this.buildings) {
       if (b.dead || !isMember(b.owner)) continue;

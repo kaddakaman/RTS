@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { FACTIONS, UPGRADE } from '../src/data/defs';
 import { castVision, generateMap, Tile } from '../src/sim/map';
 import { createMatch, duel as duelSetup } from '../src/sim/match';
 import { NEUTRAL, World, type MatchSetup } from '../src/sim/world';
@@ -281,4 +282,115 @@ describe('AI', () => {
     }
     expect(w.activePlayers.reduce((s, p) => s + p.stats.kills, 0)).toBeGreaterThan(5);
   }, 120000);
+});
+
+describe('upgrades', () => {
+  it('every unit type a faction can build has an upgrade', () => {
+    for (const f of ['coalition', 'sythari'] as const) {
+      const fac = FACTIONS[f];
+      const covered = new Set(Object.values(fac.research).flatMap((r) => r?.units ?? []));
+      for (const k of Object.keys(fac.units)) expect(covered.has(k as never), `${f} ${k}`).toBe(true);
+      // and every upgrade can be researched somewhere
+      for (const r of Object.values(fac.research)) expect(Object.values(fac.buildings).some((b) => b?.research?.includes(r!.key)), r!.key).toBe(true);
+    }
+  });
+
+  it('optics let snipers see and shoot further', () => {
+    const w = arena('coalition', 'sythari');
+    const s = w.spawnUnit(0, 'sniper', 44, 48);
+    const before = w.sightOf(s);
+    w.players[0].researched.add('optics');
+    expect(w.sightOf(s)).toBe(before + UPGRADE.optics.sight);
+    expect(w.rangeBonus(s)).toBe(UPGRADE.optics.range);
+  });
+
+  it('speed loading makes anti-vehicle teams kill tanks faster', () => {
+    const time = (upgraded: boolean) => {
+      const w = arena('coalition', 'coalition');
+      if (upgraded) w.players[0].researched.add('speedload');
+      const A = [w.spawnUnit(0, 'rocket', 44, 48), w.spawnUnit(0, 'rocket', 44, 49.5)];
+      const tank = w.spawnUnit(1, 'tank', 50, 48.5);
+      w.cmdAttack(A, tank);
+      let t = 0;
+      while (!tank.dead && t < 60) {
+        w.update(1 / 30);
+        t += 1 / 30;
+        tank.order = { type: 'idle' };
+        tank.cds[0] = 99; // the tank doesn't fight back
+      }
+      return t;
+    };
+    expect(time(true)).toBeLessThan(time(false) * 0.85);
+  });
+
+  it('active protection shoots down incoming rockets', () => {
+    const w = arena('coalition', 'coalition');
+    w.players[1].researched.add('aps');
+    const tank = w.spawnUnit(1, 'tank', 50, 48.5);
+    const r = w.spawnUnit(0, 'rocket', 45, 48.5);
+    w.cmdAttack([r], tank);
+    tank.cds[0] = 999;
+    step(w, 1.5);
+    // the first rocket is intercepted
+    expect(tank.hp).toBe(tank.maxHp);
+    expect(tank.apsReady).toBeGreaterThan(w.time);
+  });
+
+  it('jammers make guided weapons miss aircraft some of the time', () => {
+    const hits = (jam: boolean) => {
+      const w = arena('coalition', 'coalition');
+      if (jam) w.players[1].researched.add('jammer');
+      const ship = w.spawnUnit(1, 'gunship', 50, 48);
+      const sam = w.addBuilding(0, 'sam', 44, 47, true);
+      void sam;
+      ship.maxHp = ship.hp = 1e6;
+      ship.order = { type: 'idle' };
+      step(w, 30);
+      return 1e6 - ship.hp;
+    };
+    const plain = hits(false);
+    const jammed = hits(true);
+    expect(plain).toBeGreaterThan(0);
+    expect(jammed).toBeLessThan(plain * 0.8);
+  });
+
+  it('health upgrades apply to new and existing units', () => {
+    const w = arena('coalition', 'coalition');
+    const jeep = w.spawnUnit(0, 'light', 44, 48);
+    const base = jeep.maxHp;
+    w.players[0].tier = 2;
+    w.players[0].supplies = 5000;
+    const factory = w.addBuilding(0, 'factory', 40, 40, true);
+    expect(w.queueResearch(factory, 'plating')).toBe('');
+    step(w, 40);
+    expect(jeep.maxHp).toBeCloseTo(base * UPGRADE.plating.hp);
+    expect(w.spawnUnit(0, 'light', 45, 48).maxHp).toBeCloseTo(base * UPGRADE.plating.hp);
+  });
+
+  it('upgraded transports carry three squads', () => {
+    const w = arena('coalition', 'coalition');
+    const apc = w.spawnUnit(0, 'apc', 44, 48);
+    expect(w.capacityOf(apc)).toBe(2);
+    w.players[0].researched.add('hull');
+    expect(w.capacityOf(apc)).toBe(3);
+  });
+
+  it('idle builders repair damaged buildings near them', () => {
+    const w = arena('coalition', 'coalition');
+    const b = w.addBuilding(0, 'barracks', 44, 46, true);
+    b.hp = b.maxHp * 0.5;
+    w.spawnUnit(0, 'builder', 49, 47);
+    step(w, 25);
+    expect(b.hp).toBeGreaterThan(b.maxHp * 0.85);
+  });
+});
+
+describe('fog of war', () => {
+  it('the terrain is always known, but enemy units only show in line of sight', () => {
+    const w = new World(duelSetup('coalition', 'sythari', null, null, false));
+    const p = w.players[0];
+    expect(p.explored.every((v) => v === 1)).toBe(true);
+    const enemyHq = w.players[2].hq!;
+    expect(w.visibleTo(enemyHq, 0)).toBe(false);
+  });
 });

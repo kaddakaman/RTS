@@ -58,6 +58,10 @@ export class Unit {
   members: number;
   memberHp: number;
   medic = false;
+  /** Health upgrades already applied to this unit. */
+  upgrades = new Set<string>();
+  /** Active protection system: time it can next shoot down a projectile. */
+  apsReady = 0;
 
   // supply trucks
   cargo = 0;
@@ -253,6 +257,8 @@ export interface Projectile {
   dur: number;
   toAir: boolean;
   faction: FactionId;
+  /** Lost its lock on a jamming aircraft: it will miss. */
+  jammed?: boolean;
 }
 
 /** Visual/audio events the simulation reports to the renderer. */

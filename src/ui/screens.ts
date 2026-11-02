@@ -621,8 +621,8 @@ function statsTable(w: World, me: number): HTMLElement {
 
 function helpGamepad(): string {
   return `<table class="keys">
-<tr><td>Left stick</td><td>Move the reticle / camera</td></tr>
-<tr><td>Right stick</td><td>Zoom (click to reset)</td></tr>
+<tr><td>Left stick</td><td>Move the reticle around the screen (push it into an edge to scroll)</td></tr>
+<tr><td>Right stick</td><td>Scroll the map. Click: zoom in / normal / out</td></tr>
 <tr><td>A</td><td>Select what's under the reticle. <b>Hold</b> to paint-select. Double-tap a unit: all of that type on screen.</td></tr>
 <tr><td>X</td><td>Command: move, attack, gather, build/repair, board a transport or man an emplacement - whatever fits the target</td></tr>
 <tr><td>Y</td><td>Special ability (grenade, recon pulse, boost, unload…). With builders selected: <b>build menu</b></td></tr>
@@ -642,7 +642,7 @@ function helpTouch(): string {
 <tr><td>Tap your unit</td><td>Select it. Double-tap: all of that type on screen</td></tr>
 <tr><td>Long-press + drag</td><td>Paint-select several units</td></tr>
 <tr><td>Tap the ground / enemy / cache</td><td>Order the selection: move, attack, gather…</td></tr>
-<tr><td>Tap your building</td><td>Open its menu (or repair / man it if you have builders / infantry selected)</td></tr>
+<tr><td>Tap your building</td><td>Open its menu - or, with builders selected, repair it; with an infantry squad selected, man a gunner emplacement</td></tr>
 <tr><td>Buttons</td><td>Ability (or Build), Army, All, Type, ✕ cancel, Base, Alert, Zoom</td></tr>
 <tr><td>Minimap</td><td>Tap to jump there</td></tr>
 </table>`;
@@ -700,7 +700,9 @@ function helpBasics(): string {
 <li><b>Supply trucks</b> carry supplies from caches to your HQ or depots. Caches run out, so expand to new ones and build a <b>Supply Drop Zone</b> for income that never ends.</li>
 <li><b>Upgrade your HQ</b> to unlock vehicles (Tier 2), aircraft (Tier 3) and the superweapon (Tier 4). Each tier also raises your unit cap.</li>
 <li>The <b>Fortifications Yard</b> unlocks gunner emplacements (put infantry inside), anti-air and artillery.</li>
-<li><b>Fog of war</b>: you only see what your units see. Cliffs, rocks and scrub block line of sight, and units below a cliff can't see what's on top. Aircraft see over everything.</li>
+<li><b>Upgrades</b>: every unit type has one. Infantry upgrades are at the Barracks, vehicle upgrades at the Vehicle Depot, aircraft jammers at the Air Base, truck armour at the Supply Depot and faster building at the HQ.</li>
+<li><b>Repairs</b>: idle builders repair damaged buildings near them by themselves. You can also select a builder and press X (or tap) on a damaged building.</li>
+<li><b>Fog of war</b>: you can always see the land, but enemy units and structures only show up where your units and buildings can see. Cliffs, rocks and scrub block line of sight, and units below a cliff can't see what's on top. Aircraft see over everything.</li>
 <li><b>Marauders</b> hold any base nobody plays (and the central outpost). They leave you alone unless you enter their territory, but if you attack them they send raiders after you. Destroy a stronghold for a bounty and free access to its supplies.</li>
 <li>Your base sits on a plateau with a wide main ramp and a narrow side ramp. Defend those chokepoints, and watch the cliff edges for air drops.</li>
 <li><b>Dropships</b> fly infantry over cliffs and walls: board them (X on the dropship), fly over, then press Y to unload.</li>

@@ -387,11 +387,11 @@ export function generateMap(): GameMap {
       m.piles.push({ x: r.x, y: r.y, amount, label });
     }
   };
-  pile(38, 88, 10000, 'Main cache');
-  pile(42, 61, 6000, 'Forward cache');
-  pile(56, 65, 5000, 'Field cache');
-  pile(6, 88, 6000, 'Corner cache');
-  pile(42, 52, 4000, 'Central hoard');
+  pile(38, 88, 15000, 'Main cache');
+  pile(42, 61, 9000, 'Forward cache');
+  pile(56, 65, 8000, 'Field cache');
+  pile(6, 88, 9000, 'Corner cache');
+  pile(42, 52, 6000, 'Central hoard');
 
   // make sure caches sit on open ground
   for (const p of m.piles)

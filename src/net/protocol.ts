@@ -10,11 +10,11 @@ import type { Command } from '../sim/commands';
 import { Building, Pile, Unit, type Alert, type FxEvent, type Projectile } from '../sim/entities';
 import { SLOTS, type MatchSetup, type Stats, type World } from '../sim/world';
 
-export const PROTOCOL = 1;
+export const PROTOCOL = 2;
 
 export const UNIT_KEYS: UnitKey[] = ['builder', 'truck', 'rifle', 'sniper', 'rocket', 'scout', 'light', 'tank', 'apc', 'bomber', 'gunship', 'dropship', 'raider', 'rocketeer', 'technical', 'junker'];
 export const BUILDING_KEYS: BuildingKey[] = ['hq', 'barracks', 'depot', 'defense', 'factory', 'airbase', 'dropzone', 'super', 'sam', 'arty', 'bunker', 'fortress', 'tower'];
-export const RESEARCH_KEYS: ResearchKey[] = ['tier2', 'tier3', 'tier4', 'medic'];
+export const RESEARCH_KEYS: ResearchKey[] = ['tier2', 'tier3', 'tier4', 'medic', 'optics', 'speedload', 'aps', 'plating', 'sensors', 'hull', 'jammer', 'cabs', 'rapid'];
 export const FX_KINDS: FxKind[] = ['bullet', 'sniper', 'laser', 'rocket', 'plasma', 'shell', 'beam', 'bomb', 'missile', 'arty'];
 const FACTION_IDS = ['coalition', 'sythari', 'marauder'] as const;
 

@@ -1,7 +1,7 @@
 // Turns gamepad / touch / mouse input into selections and orders.
 //
 // Gamepad scheme (modelled on Halo Wars):
-//   Left stick  move the reticle (the camera follows it)     Right stick  zoom
+//   Left stick  move the reticle (push it into an edge to scroll)   Right stick  scroll (click: zoom)
 //   A           select (tap) / paint-select (hold)           X  command: move / attack / gather / build / board
 //   Y           unit ability, or the build menu for builders  B  cancel / deselect
 //   LB          select all army on screen (double-tap: whole map)
@@ -80,6 +80,8 @@ export class Controller {
   private mouseDown: { x: number; y: number; button: number } | null = null;
   private mousePos: { x: number; y: number } | null = null;
   private stickyT = 0;
+  /** Gamepad reticle position on screen (CSS pixels). */
+  padCursor: { x: number; y: number } | null = null;
   enabled = true;
 
   constructor(
@@ -113,14 +115,16 @@ export class Controller {
     if (!this.enabled) return;
     const inp = this.input;
     const gp = inp.device === 'gamepad';
-    // the reticle is always the centre of the screen on a gamepad
-    if (gp) this.cursor = { x: this.r.cam.x, y: this.r.cam.y };
-    else if (inp.device === 'mouse' && this.mousePos) this.cursor = this.r.screenToWorld(this.mousePos.x, this.mousePos.y);
+    // on a gamepad the reticle moves around the screen; the camera scrolls at the edges
+    if (gp) {
+      if (!this.padCursor) this.padCursor = { x: this.r.w / 2, y: this.r.h / 2 };
+      this.cursor = this.r.screenToWorld(this.padCursor.x, this.padCursor.y);
+    } else if (inp.device === 'mouse' && this.mousePos) this.cursor = this.r.screenToWorld(this.mousePos.x, this.mousePos.y);
     this.hover = gp || (inp.device === 'mouse' && this.mousePos) ? this.pick(this.cursor.x, this.cursor.y, gp ? 0.55 : 0.2) : null;
     this.gamepad(dt);
     this.keyboard(dt);
     this.r.clampCamera();
-    if (gp) this.cursor = { x: this.r.cam.x, y: this.r.cam.y };
+    if (gp && this.padCursor) this.cursor = this.r.screenToWorld(this.padCursor.x, this.padCursor.y);
   }
 
   /** What's under a world point: a visible unit, a building, or a supply cache. */
@@ -184,7 +188,11 @@ export class Controller {
 
   /** What pressing X / tapping would do right now (colours the reticle). */
   hint(): ViewState['hint'] {
-    const h = this.hover;
+    return this.hintFor(this.hover);
+  }
+
+  /** What an order on `h` would do with the current selection. */
+  hintFor(h: Thing | null): ViewState['hint'] {
     if (this.mode === 'place' || this.mode === 'target' || this.mode === 'rally') return 'move';
     if (!this.selected.length) return h && h.kind !== 'pile' && h.owner === this.me ? 'select' : '';
     if (!h) return 'move';
@@ -193,7 +201,7 @@ export class Controller {
     if (h.owner === this.me) {
       if (h.kind === 'building' && (!h.built || h.hp < h.maxHp) && this.selected.some((u) => u.def.role === 'builder')) return 'build';
       if (h.kind === 'building' && h.def.garrison && h.built && !h.garrison && this.selected.some((u) => u.def.infantry)) return 'board';
-      if (h.kind === 'unit' && h.def.capacity && this.selected.some((u) => u.def.infantry)) return 'board';
+      if (h.kind === 'unit' && this.w.capacityOf(h) > 0 && this.selected.some((u) => u.def.infantry)) return 'board';
       return 'select';
     }
     return 'move';
@@ -204,7 +212,7 @@ export class Controller {
   private gamepad(dt: number): void {
     const inp = this.input;
     if (!inp.padConnected) return;
-    const [lx, ly, , ry] = inp.axes;
+    const [lx, ly, rx, ry] = inp.axes;
     const cam = this.r.cam;
 
     if (this.mode === 'radial' && this.radial) {
@@ -228,15 +236,32 @@ export class Controller {
       return;
     }
 
-    // pan: faster when zoomed out, a little "sticky" over things you can select
-    const sticky = this.hover && this.hover.kind !== 'pile' ? 0.55 : 1;
-    if (this.hover) this.stickyT = 0.15;
-    const speed = 16 * (34 / cam.zoom) * (this.stickyT > 0 && sticky < 1 ? sticky : 1);
+    // left stick moves the reticle, a little "sticky" over things you can select
+    const pc = this.padCursor ?? (this.padCursor = { x: this.r.w / 2, y: this.r.h / 2 });
+    if (this.hover && this.hover.kind !== 'pile') this.stickyT = 0.15;
+    const sticky = this.stickyT > 0 ? 0.5 : 1;
     this.stickyT -= dt;
-    cam.x += lx * Math.abs(lx) * speed * dt * 1.4;
-    cam.y += ly * Math.abs(ly) * speed * dt * 1.4;
-    if (ry) cam.zoom = clamp(cam.zoom * Math.exp(-ry * dt * 2.2), 16, 64);
-    if (inp.pressed(BTN.RS)) cam.zoom = 34;
+    const curSpeed = Math.min(this.r.w, this.r.h) * 1.15 * sticky;
+    pc.x = clamp(pc.x + lx * Math.abs(lx) * curSpeed * dt, 4, this.r.w - 4);
+    pc.y = clamp(pc.y + ly * Math.abs(ly) * curSpeed * dt, 4, this.r.h - 4);
+    // pushing the reticle into a screen edge scrolls the map; the right stick scrolls it directly
+    const edge = Math.min(this.r.w, this.r.h) * 0.12;
+    let ex = 0;
+    let ey = 0;
+    if (pc.x < edge && lx < -0.1) ex = -(edge - pc.x) / edge;
+    else if (pc.x > this.r.w - edge && lx > 0.1) ex = (pc.x - (this.r.w - edge)) / edge;
+    if (pc.y < edge && ly < -0.1) ey = -(edge - pc.y) / edge;
+    else if (pc.y > this.r.h - edge && ly > 0.1) ey = (pc.y - (this.r.h - edge)) / edge;
+    const pan = 20 * (34 / cam.zoom) * dt;
+    cam.x += (ex + rx * Math.abs(rx)) * pan;
+    cam.y += (ey + ry * Math.abs(ry)) * pan;
+    if (inp.pressed(BTN.RS)) {
+      // cycle close / normal / far
+      const zooms = [46, 34, 24];
+      const i = zooms.findIndex((z) => cam.zoom > z - 4);
+      cam.zoom = zooms[(i + 1) % zooms.length];
+      this.zoomBack = 0;
+    }
     if (inp.pressed(BTN.LT)) this.toggleZoom();
 
     if (this.mode === 'place' || this.mode === 'target' || this.mode === 'rally') {
@@ -500,14 +525,15 @@ export class Controller {
     const h = this.pick(wp.x, wp.y, 0.35);
     const me = this.me;
     if (h && h.kind === 'unit' && h.owner === me) {
-      const boarding = h.def.capacity && this.selected.some((u) => u.def.infantry) && !this.selected.includes(h);
+      const boarding = this.w.capacityOf(h) > 0 && this.selected.some((u) => u.def.infantry) && !this.selected.includes(h);
       if (boarding) this.command(wp.x, wp.y, h);
       else if (dbl) this.selectType(h.key);
       else this.tapSelect(h, false);
       return;
     }
     if (h && h.kind === 'building' && h.owner === me) {
-      const hint = this.hint();
+      // with builders or infantry selected, tapping a building repairs it / mans it
+      const hint = this.hintFor(h);
       if (this.selected.length && (hint === 'build' || hint === 'board')) this.command(wp.x, wp.y, h);
       else this.tapSelect(h, false);
       return;
@@ -654,8 +680,8 @@ export class Controller {
     }
     if (!this.selected.length) return;
     const units = this.ids();
+    const hint = this.hintFor(h);
     const res = this.hooks.issue({ c: 'smart', units, x, y, hover: h ? h.id : 0 });
-    const hint = this.hint();
     const kind: Marker['kind'] =
       hint === 'attack' ? 'attack' : hint === 'gather' ? 'gather' : hint === 'build' ? 'build' : hint === 'board' ? 'board' : 'move';
     const mx = h && h.kind !== 'unit' ? h.x : x;
@@ -778,6 +804,11 @@ export class Controller {
   jumpTo(x: number, y: number): void {
     this.r.cam.x = x;
     this.r.cam.y = y;
+    // put the reticle back in the middle, on whatever we jumped to
+    if (this.padCursor) {
+      this.padCursor.x = this.r.w / 2;
+      this.padCursor.y = this.r.h / 2;
+    }
   }
 
   jumpHQ(): void {
@@ -866,7 +897,6 @@ export class Controller {
     const w = this.w;
     const me = this.me;
     const pl = () => w.players[me];
-    const fac = () => FACTIONS[pl().faction];
     this.radial = {
       title: b.def.name,
       subtitle: b.built ? b.def.desc : 'Under construction',
@@ -899,24 +929,27 @@ export class Controller {
             },
           });
         }
-        for (const k of b.def.research ?? []) {
-          const d = fac().research[k]!;
-          if (pl().researched.has(k)) continue;
-          if (d.tier && d.tier !== pl().tier + 1) continue;
-          const why = w.researchBlocker(b, k);
-          const inQ = b.queue.find((q) => q.key === k);
+        // upgrades: inline when there's room, otherwise in their own sub-menu
+        const research = this.researchOptions(b);
+        if (research.length && out.length + research.length > 5) {
+          const done = (b.def.research ?? []).filter((k) => pl().researched.has(k)).length;
           out.push({
-            id: k, icon: d.icon, label: d.name, detail: d.desc, cost: d.cost, enabled: !why, reason: why, count: inQ ? 1 : 0,
-            progress: inQ && b.queue[0] === inQ ? inQ.t / inQ.total : undefined,
+            id: 'upgrades', icon: '⬆', label: 'Upgrades ▸', detail: `Unit upgrades researched here (${done} of ${(b.def.research ?? []).length} done).`, enabled: true,
+            count: b.queue.filter((q) => q.kind === 'research').length,
             run: () => {
-              const res = this.hooks.issue({ c: 'research', b: b.id, key: k });
-              if (res) {
-                this.hooks.toast(res, 'error');
-                sfx('error');
-              } else sfx('click');
+              const parent = this.radial;
+              this.radial = {
+                title: `${b.def.name} upgrades`,
+                subtitle: '',
+                index: 0,
+                options: () => this.researchOptions(b),
+                back: () => {
+                  this.radial = parent;
+                },
+              };
             },
           });
-        }
+        } else out.push(...research);
         if (b.def.produces) {
           out.push({
             id: 'rally', icon: '⚑', label: 'Set rally point', detail: 'New units will head here. (Or press X anywhere while this building is selected.)', enabled: true,
@@ -946,6 +979,32 @@ export class Controller {
         return out;
       },
     };
+  }
+
+  private researchOptions(b: Building): RadialOption[] {
+    const w = this.w;
+    const pl = w.players[this.me];
+    const fac = FACTIONS[pl.faction];
+    const out: RadialOption[] = [];
+    for (const k of b.def.research ?? []) {
+      const d = fac.research[k]!;
+      if (pl.researched.has(k)) continue;
+      if (d.tier && d.tier !== pl.tier + 1) continue;
+      const why = w.researchBlocker(b, k);
+      const inQ = b.queue.find((q) => q.key === k);
+      out.push({
+        id: k, icon: d.icon, label: d.name, detail: d.desc, cost: d.cost, enabled: !why, reason: why, count: inQ ? 1 : 0,
+        progress: inQ && b.queue[0] === inQ ? inQ.t / inQ.total : undefined,
+        run: () => {
+          const res = this.hooks.issue({ c: 'research', b: b.id, key: k });
+          if (res) {
+            this.hooks.toast(res, 'error');
+            sfx('error');
+          } else sfx('click');
+        },
+      });
+    }
+    return out;
   }
 
   openBuildMenu(): void {

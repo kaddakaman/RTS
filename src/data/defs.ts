@@ -17,7 +17,9 @@ export type UnitKey =
 export type BuildingKey =
   | 'hq' | 'barracks' | 'depot' | 'defense' | 'factory' | 'airbase' | 'dropzone' | 'super' | 'sam' | 'arty' | 'bunker'
   | 'fortress' | 'tower';
-export type ResearchKey = 'tier2' | 'tier3' | 'tier4' | 'medic';
+export type ResearchKey =
+  | 'tier2' | 'tier3' | 'tier4'
+  | 'medic' | 'optics' | 'speedload' | 'aps' | 'plating' | 'sensors' | 'hull' | 'jammer' | 'cabs' | 'rapid';
 
 /**
  * Rock-paper-scissors: damage multiplier for each damage type against each armour class.
@@ -135,6 +137,8 @@ export interface ResearchDef {
   /** Tier the HQ reaches when this upgrade finishes. */
   tier?: number;
   icon: string;
+  /** Unit types this upgrade improves. */
+  units?: UnitKey[];
 }
 
 export interface FactionDef {
@@ -165,6 +169,28 @@ export const ABILITIES: Record<AbilityId, { name: string; cooldown: number; desc
 };
 
 export const GRENADE = { damage: 70, splash: 1.6, range: 6 };
+
+/** What each unit upgrade does (see world.ts for where they apply). */
+export const UPGRADE = {
+  /** Snipers / lancers see further and shoot a little further. */
+  optics: { sight: 4, range: 1 },
+  /** Anti-vehicle teams reload faster: cooldown multiplier. */
+  speedload: { reload: 0.65 },
+  /** Battle tanks shoot down one incoming rocket or plasma bolt every few seconds. */
+  aps: { cooldown: 4 },
+  /** Light combat vehicles get more armour: health multiplier. */
+  plating: { hp: 1.3 },
+  /** Scouts see further and recharge their recon pulse twice as fast. */
+  sensors: { sight: 3, recon: 0.5 },
+  /** Transports get tougher and carry one more squad. */
+  hull: { hp: 1.25, capacity: 1 },
+  /** Aircraft: chance that a guided missile, rocket or bolt loses its lock and misses. */
+  jammer: { chance: 0.4 },
+  /** Supply trucks get tougher. */
+  cabs: { hp: 1.5 },
+  /** Builders construct and repair faster. */
+  rapid: { build: 1.4 },
+};
 export const RECON = { radius: 15, duration: 8 };
 export const BOOST = { mult: 1.8, duration: 3 };
 
@@ -185,12 +211,23 @@ function buildings(faction: FactionId, spec: Partial<Record<BuildingKey, Buildin
   return out;
 }
 
-function tiers(names: [string, string, string], medic: string, medicDesc: string): Partial<Record<ResearchKey, ResearchDef>> {
+/** HQ tiers plus one upgrade for every unit type. */
+function research(names: Record<Exclude<ResearchKey, 'tier2' | 'tier3' | 'tier4'>, string> & { tiers: [string, string, string] }): Partial<Record<ResearchKey, ResearchDef>> {
+  const t = names.tiers;
   return {
-    tier2: { key: 'tier2', name: names[0], cost: 1200, time: 45, tier: 2, icon: 'II', desc: 'HQ Tier 2. Unlocks the vehicle factory, artillery and the medic upgrade. Raises the unit cap.' },
-    tier3: { key: 'tier3', name: names[1], cost: 2000, time: 60, tier: 3, needsTier: 2, icon: 'III', desc: 'HQ Tier 3. Unlocks the air base. Raises the unit cap.' },
-    tier4: { key: 'tier4', name: names[2], cost: 3000, time: 75, tier: 4, needsTier: 3, icon: 'IV', desc: 'HQ Tier 4. Unlocks the superweapon. Raises the unit cap.' },
-    medic: { key: 'medic', name: medic, cost: 600, time: 40, needsTier: 2, icon: '+', desc: medicDesc },
+    tier2: { key: 'tier2', name: t[0], cost: 1200, time: 45, tier: 2, icon: 'II', desc: 'HQ Tier 2. Unlocks the vehicle depot, artillery and most unit upgrades. Raises the unit cap.' },
+    tier3: { key: 'tier3', name: t[1], cost: 2000, time: 60, tier: 3, needsTier: 2, icon: 'III', desc: 'HQ Tier 3. Unlocks the air base. Raises the unit cap.' },
+    tier4: { key: 'tier4', name: t[2], cost: 3000, time: 75, tier: 4, needsTier: 3, icon: 'IV', desc: 'HQ Tier 4. Unlocks the superweapon. Raises the unit cap.' },
+    medic: { key: 'medic', name: names.medic, cost: 600, time: 40, needsTier: 2, icon: '+', units: ['rifle'], desc: 'General infantry: adds a medic to every squad, an extra member and passive healing out of combat.' },
+    optics: { key: 'optics', name: names.optics, cost: 500, time: 35, needsTier: 2, icon: '◎', units: ['sniper'], desc: `Counter-infantry: +${UPGRADE.optics.sight} vision and +${UPGRADE.optics.range} range, so they spot and shoot first.` },
+    speedload: { key: 'speedload', name: names.speedload, cost: 700, time: 40, needsTier: 2, icon: '»', units: ['rocket'], desc: 'Anti-vehicle teams reload about 50% faster, for much more damage per second.' },
+    aps: { key: 'aps', name: names.aps, cost: 900, time: 45, icon: '◈', units: ['tank'], desc: `Battle tanks shoot down one incoming rocket or plasma bolt every ${UPGRADE.aps.cooldown} seconds.` },
+    plating: { key: 'plating', name: names.plating, cost: 500, time: 35, icon: '▤', units: ['light'], desc: 'Light combat vehicles get 30% more health.' },
+    sensors: { key: 'sensors', name: names.sensors, cost: 300, time: 25, icon: '⌖', units: ['scout'], desc: `Scouts get +${UPGRADE.sensors.sight} vision and recharge their recon pulse twice as fast.` },
+    hull: { key: 'hull', name: names.hull, cost: 400, time: 30, icon: '▣', units: ['apc'], desc: 'Transports get 25% more health and carry three squads instead of two.' },
+    jammer: { key: 'jammer', name: names.jammer, cost: 1000, time: 45, icon: '≋', units: ['gunship', 'bomber', 'dropship'], desc: 'All aircraft: 40% of guided missiles, rockets and plasma bolts fired at them lose their lock and miss.' },
+    cabs: { key: 'cabs', name: names.cabs, cost: 300, time: 25, icon: '▥', units: ['truck'], desc: 'Supply trucks get 50% more health.' },
+    rapid: { key: 'rapid', name: names.rapid, cost: 400, time: 30, icon: '⚒', units: ['builder'], desc: 'Builders construct and repair 40% faster.' },
   };
 }
 
@@ -213,7 +250,7 @@ const coalition: FactionDef = {
     },
     truck: {
       name: 'Supply Truck', role: 'gatherer', armor: 'light', move: 'wheel', hp: 320, speed: 3.6, sight: 6, radius: 0.5,
-      cost: 300, time: 14, pop: 1, weapons: [], carry: 50, loadTime: 4, icon: 'TR',
+      cost: 300, time: 14, pop: 1, weapons: [], carry: 40, loadTime: 4.5, icon: 'TR',
       desc: 'Hauls supplies from caches to your HQ or a supply depot.', strong: '-', weak: 'Everything',
     },
     rifle: {
@@ -280,19 +317,19 @@ const coalition: FactionDef = {
   }),
   buildings: buildings('coalition', {
     hq: {
-      name: 'Command Center', w: 4, h: 4, hp: 6000, sight: 10, cost: 0, time: 1, produces: ['builder'], research: ['tier2', 'tier3', 'tier4'],
+      name: 'Command Center', w: 4, h: 4, hp: 6000, sight: 10, cost: 0, time: 1, produces: ['builder'], research: ['tier2', 'tier3', 'tier4', 'rapid'],
       dropoff: true, icon: 'HQ',
       weapons: [{ name: 'Defence gun', dmg: 'small', damage: 12, cooldown: 0.5, range: 7, air: true, turret: true, fx: 'bullet' }],
       desc: 'Your headquarters. If it is destroyed, you lose. Builds dozers and upgrades your tech tier.',
     },
-    barracks: { name: 'Barracks', w: 3, h: 3, hp: 1500, sight: 8, cost: 500, time: 25, produces: ['rifle', 'sniper', 'rocket'], research: ['medic'], icon: 'BK', desc: 'Trains infantry squads.' },
+    barracks: { name: 'Barracks', w: 3, h: 3, hp: 1500, sight: 8, cost: 500, time: 25, produces: ['rifle', 'sniper', 'rocket'], research: ['medic', 'optics', 'speedload'], icon: 'BK', desc: 'Trains infantry squads.' },
     depot: {
-      name: 'Supply Depot', w: 3, h: 3, hp: 1300, sight: 8, cost: 600, time: 25, produces: ['truck'], dropoff: true, nearPile: 8, freeUnit: 'truck', icon: 'SD',
+      name: 'Supply Depot', w: 3, h: 3, hp: 1300, sight: 8, cost: 600, time: 25, produces: ['truck'], research: ['cabs'], dropoff: true, nearPile: 8, freeUnit: 'truck', icon: 'SD',
       desc: 'Must be built near a supply cache. Comes with a free supply truck and builds more.',
     },
     defense: { name: 'Fortifications Yard', w: 3, h: 3, hp: 1300, sight: 8, cost: 600, time: 25, needs: ['barracks'], icon: 'FY', desc: 'Lets your dozers build gunner emplacements, SAM sites and howitzers.' },
-    factory: { name: 'Vehicle Depot', w: 4, h: 4, hp: 2200, sight: 8, cost: 1000, time: 35, tier: 2, produces: ['scout', 'light', 'tank', 'apc'], icon: 'VD', desc: 'Builds vehicles. Requires HQ Tier 2.' },
-    airbase: { name: 'Air Base', w: 4, h: 4, hp: 2000, sight: 9, cost: 1400, time: 40, tier: 3, produces: ['gunship', 'bomber', 'dropship'], pads: 2, icon: 'AB', desc: 'Builds aircraft and rearms bombers. Requires HQ Tier 3.' },
+    factory: { name: 'Vehicle Depot', w: 4, h: 4, hp: 2200, sight: 8, cost: 1000, time: 35, tier: 2, produces: ['scout', 'light', 'tank', 'apc'], research: ['aps', 'plating', 'sensors', 'hull'], icon: 'VD', desc: 'Builds vehicles. Requires HQ Tier 2.' },
+    airbase: { name: 'Air Base', w: 4, h: 4, hp: 2000, sight: 9, cost: 1400, time: 40, tier: 3, produces: ['gunship', 'bomber', 'dropship'], research: ['jammer'], pads: 2, icon: 'AB', desc: 'Builds aircraft and rearms bombers. Requires HQ Tier 3.' },
     dropzone: {
       name: 'Supply Drop Zone', w: 3, h: 3, hp: 1000, sight: 7, cost: 1500, time: 30, needs: ['depot'], max: 3, dropZone: { amount: 300, interval: 45 }, icon: 'DZ',
       desc: 'A cargo plane air-drops 300 supplies here every 45 seconds, forever. Build it before the caches run dry.',
@@ -316,7 +353,19 @@ const coalition: FactionDef = {
       desc: 'Send an infantry squad inside: it deals 50% more damage, gains range and takes far less damage.',
     },
   }),
-  research: tiers(['HQ Tier 2', 'HQ Tier 3', 'HQ Tier 4'], 'Field Medics', 'Adds a field medic to every rifle squad: an extra man and passive healing out of combat.'),
+  research: research({
+    tiers: ['HQ Tier 2', 'HQ Tier 3', 'HQ Tier 4'],
+    medic: 'Field Medics',
+    optics: 'Spotter Optics',
+    speedload: 'Speed Loading',
+    aps: 'Active Protection',
+    plating: 'Composite Plating',
+    sensors: 'Long-Range Sensors',
+    hull: 'Reinforced Hull',
+    jammer: 'ECM Jammers',
+    cabs: 'Armoured Cabs',
+    rapid: 'Rapid Construction',
+  }),
 };
 
 // ---------------------------------------------------------------- Sythari (alien)
@@ -338,7 +387,7 @@ const sythari: FactionDef = {
     },
     truck: {
       name: 'Harvester Drone', role: 'gatherer', armor: 'light', move: 'wheel', hp: 260, speed: 4.0, sight: 6, radius: 0.48,
-      cost: 300, time: 14, pop: 1, weapons: [], carry: 50, loadTime: 4, icon: 'HV',
+      cost: 300, time: 14, pop: 1, weapons: [], carry: 40, loadTime: 4.5, icon: 'HV',
       desc: 'Siphons supplies from caches to your Nexus or a siphon node.', strong: '-', weak: 'Everything',
     },
     rifle: {
@@ -405,19 +454,19 @@ const sythari: FactionDef = {
   }),
   buildings: buildings('sythari', {
     hq: {
-      name: 'Nexus Spire', w: 4, h: 4, hp: 6000, sight: 10, cost: 0, time: 1, produces: ['builder'], research: ['tier2', 'tier3', 'tier4'],
+      name: 'Nexus Spire', w: 4, h: 4, hp: 6000, sight: 10, cost: 0, time: 1, produces: ['builder'], research: ['tier2', 'tier3', 'tier4', 'rapid'],
       dropoff: true, icon: 'NX',
       weapons: [{ name: 'Spire pulse', dmg: 'small', damage: 12, cooldown: 0.5, range: 7, air: true, turret: true, fx: 'laser' }],
       desc: 'Your headquarters. If it is destroyed, you lose. Grows shaper drones and ascends your tech tier.',
     },
-    barracks: { name: 'Warrior Sanctum', w: 3, h: 3, hp: 1500, sight: 8, cost: 500, time: 25, produces: ['rifle', 'sniper', 'rocket'], research: ['medic'], icon: 'WS', desc: 'Births infantry squads.' },
+    barracks: { name: 'Warrior Sanctum', w: 3, h: 3, hp: 1500, sight: 8, cost: 500, time: 25, produces: ['rifle', 'sniper', 'rocket'], research: ['medic', 'optics', 'speedload'], icon: 'WS', desc: 'Births infantry squads.' },
     depot: {
-      name: 'Siphon Node', w: 3, h: 3, hp: 1300, sight: 8, cost: 600, time: 25, produces: ['truck'], dropoff: true, nearPile: 8, freeUnit: 'truck', icon: 'SN',
+      name: 'Siphon Node', w: 3, h: 3, hp: 1300, sight: 8, cost: 600, time: 25, produces: ['truck'], research: ['cabs'], dropoff: true, nearPile: 8, freeUnit: 'truck', icon: 'SN',
       desc: 'Must be built near a supply cache. Comes with a free harvester drone and grows more.',
     },
     defense: { name: 'Bastion Forge', w: 3, h: 3, hp: 1300, sight: 8, cost: 600, time: 25, needs: ['barracks'], icon: 'BF', desc: 'Lets your shapers grow bastion pods, disruptor spires and siege obelisks.' },
-    factory: { name: 'Grav Foundry', w: 4, h: 4, hp: 2200, sight: 8, cost: 1000, time: 35, tier: 2, produces: ['scout', 'light', 'tank', 'apc'], icon: 'GF', desc: 'Builds hover vehicles. Requires Nexus Tier 2.' },
-    airbase: { name: 'Skyhive', w: 4, h: 4, hp: 2000, sight: 9, cost: 1400, time: 40, tier: 3, produces: ['gunship', 'bomber', 'dropship'], pads: 2, icon: 'SY', desc: 'Builds aircraft and recharges strikers. Requires Nexus Tier 3.' },
+    factory: { name: 'Grav Foundry', w: 4, h: 4, hp: 2200, sight: 8, cost: 1000, time: 35, tier: 2, produces: ['scout', 'light', 'tank', 'apc'], research: ['aps', 'plating', 'sensors', 'hull'], icon: 'GF', desc: 'Builds hover vehicles. Requires Nexus Tier 2.' },
+    airbase: { name: 'Skyhive', w: 4, h: 4, hp: 2000, sight: 9, cost: 1400, time: 40, tier: 3, produces: ['gunship', 'bomber', 'dropship'], research: ['jammer'], pads: 2, icon: 'SY', desc: 'Builds aircraft and recharges strikers. Requires Nexus Tier 3.' },
     dropzone: {
       name: 'Teleport Beacon', w: 3, h: 3, hp: 1000, sight: 7, cost: 1500, time: 30, needs: ['depot'], max: 3, dropZone: { amount: 300, interval: 45 }, icon: 'TB',
       desc: 'Supplies are teleported down here from orbit: 300 every 45 seconds, forever.',
@@ -441,7 +490,19 @@ const sythari: FactionDef = {
       desc: 'Send an infantry squad inside: it deals 50% more damage, gains range and takes far less damage.',
     },
   }),
-  research: tiers(['Nexus Ascension II', 'Nexus Ascension III', 'Nexus Ascension IV'], 'Mender Symbionts', 'Adds a mender to every striker squad: an extra warrior and passive healing out of combat.'),
+  research: research({
+    tiers: ['Nexus Ascension II', 'Nexus Ascension III', 'Nexus Ascension IV'],
+    medic: 'Mender Symbionts',
+    optics: 'Seer Link',
+    speedload: 'Plasma Capacitors',
+    aps: 'Phase Deflector',
+    plating: 'Hardened Carapace',
+    sensors: 'Deep Scanners',
+    hull: 'Expanded Hold',
+    jammer: 'Signal Scramblers',
+    cabs: 'Chitin Shells',
+    rapid: 'Rapid Shaping',
+  }),
 };
 
 // ---------------------------------------------------------------- Marauders (neutral)

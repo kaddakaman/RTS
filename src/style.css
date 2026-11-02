@@ -736,6 +736,16 @@ td.bad,
   max-width: 260px;
 }
 
+.hoverinfo.left {
+  right: auto;
+  left: calc(8px + var(--safe-l));
+}
+
+.upg {
+  margin-top: 2px;
+  font-size: 11px;
+}
+
 .padhints {
   position: absolute;
   bottom: calc(4px + var(--safe-b));
